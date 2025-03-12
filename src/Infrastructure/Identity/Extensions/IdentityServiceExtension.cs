@@ -10,8 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ASD.SeedProjectNet8.Application.Identity.Interfaces;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
 
-namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 
 internal static class IdentityServiceExtension
 {

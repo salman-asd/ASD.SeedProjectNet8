@@ -1,11 +1,12 @@
 ﻿using ASD.SeedProjectNet8.Domain.Constants;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 
 public static class IdentityInitialiserExtensions
 {

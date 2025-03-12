@@ -1,3 +1,6 @@
+using ASD.SeedProjectNet8.Infrastructure.Data;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string Allow_Origin_Policy = "Allow-Origin-Policy";
@@ -30,6 +33,7 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    await app.IdentityInitialiseDatabaseAsync();
     //await app.InitialiseDatabaseAsync();
 }
 else
@@ -53,14 +57,16 @@ app.UseCors(Allow_Origin_Policy);
 app.UseRouting();
 app.UseAuthorization();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller}/{action}");
 
 // Optionally add an API-specific route
 app.MapControllerRoute(
     name: "api",
     pattern: "api/{controller}/{action}");
+
+app.MapControllerRoute(
+    name: "default",
+    pattern: "{controller}/{action}");
+
 
 app.MapControllers();
 

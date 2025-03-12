@@ -2,6 +2,8 @@ using System.Transactions;
 using ASD.SeedProjectNet8.Application.Common.Interfaces;
 using ASD.SeedProjectNet8.Application.Common.Models;
 using ASD.SeedProjectNet8.Application.Identity.Commands;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 

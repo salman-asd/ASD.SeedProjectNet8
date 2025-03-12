@@ -1,4 +1,6 @@
-﻿namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
 
 public class RefreshToken
 {

@@ -1,5 +1,5 @@
 ﻿using ASD.SeedProjectNet8.Domain.Entities;
-using ASD.SeedProjectNet8.Infrastructure.Identity;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

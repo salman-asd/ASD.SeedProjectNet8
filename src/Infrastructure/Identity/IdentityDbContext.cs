@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -36,11 +37,11 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasKey(u => u.Id);
             entity.Property(u => u.FirstName)
                 .HasMaxLength(100)
-                .IsRequired();
+                .IsRequired(false);
 
             entity.Property(u => u.LastName)
                 .HasMaxLength(100)
-                .IsRequired();
+                .IsRequired(false);
 
             entity.Property(u => u.IsActive)
                 .IsRequired();

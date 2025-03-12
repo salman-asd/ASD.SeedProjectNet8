@@ -1,4 +1,5 @@
-﻿using ASD.SeedProjectNet8.Infrastructure.Identity.OptionsSetup;
+﻿using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.OptionsSetup;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -25,8 +26,9 @@ internal sealed class TokenProviderService(
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user!.Id),
-            //new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(ClaimTypes.NameIdentifier, user!.Id),
+            //new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim("username", user.UserName!),
         }
         .Union(userRolesAsClaims);
@@ -39,7 +41,7 @@ internal sealed class TokenProviderService(
              issuer: _jwtOptions.Issuer,
              audience: _jwtOptions.Audience,
              claims: claims,
-             expires: DateTime.Now.AddMinutes(_jwtOptions.DurationInMinutes),
+             expires: DateTime.UtcNow.AddMinutes(_jwtOptions.DurationInMinutes),
              signingCredentials: signingCredentials
         );
 

@@ -1,6 +1,7 @@
 ﻿using ASD.SeedProjectNet8.Domain.Constants;
 using ASD.SeedProjectNet8.Infrastructure.Data;
-using ASD.SeedProjectNet8.Infrastructure.Identity;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
