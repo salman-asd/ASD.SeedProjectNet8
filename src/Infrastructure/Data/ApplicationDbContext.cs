@@ -1,13 +1,11 @@
 ﻿using System.Reflection;
 using ASD.SeedProjectNet8.Application.Common.Interfaces;
 using ASD.SeedProjectNet8.Domain.Entities;
-using ASD.SeedProjectNet8.Infrastructure.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace ASD.SeedProjectNet8.Infrastructure.Data;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser>, IApplicationDbContext
+public class ApplicationDbContext : DbContext, IApplicationDbContext
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
