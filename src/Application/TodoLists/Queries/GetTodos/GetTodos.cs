@@ -1,11 +1,14 @@
 ﻿using ASD.SeedProjectNet8.Application.Common.Interfaces;
 using ASD.SeedProjectNet8.Application.Common.Models;
 using ASD.SeedProjectNet8.Application.Common.Security;
+using ASD.SeedProjectNet8.Domain.Constants;
 using ASD.SeedProjectNet8.Domain.Enums;
 
 namespace ASD.SeedProjectNet8.Application.TodoLists.Queries.GetTodos;
 
-[Authorize]
+//[Authorize(Roles = Roles.Administrator)]
+[Authorize(Roles = Roles.Basic)]
+
 public record GetTodosQuery : IRequest<TodosVm>;
 
 public class GetTodosQueryHandler : IRequestHandler<GetTodosQuery, TodosVm>

@@ -34,7 +34,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     await app.IdentityInitialiseDatabaseAsync();
-    //await app.InitialiseDatabaseAsync();
+    await app.InitialiseDatabaseAsync();
 }
 else
 {
