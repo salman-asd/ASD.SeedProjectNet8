@@ -1,9 +1,24 @@
-using ASD.SeedProjectNet8.Infrastructure.Data;
-
 var builder = WebApplication.CreateBuilder(args);
 
+const string Allow_Origin_Policy = "Allow-Origin-Policy";
+
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(Allow_Origin_Policy, builder =>
+    {
+        builder.WithOrigins(allowedOrigins)
+               .AllowAnyHeader()
+               .AllowAnyMethod()
+               .AllowCredentials();
+    });
+});
+
 // Add services to the container.
-builder.Services.AddKeyVaultIfConfigured(builder.Configuration);
+builder.Services.AddControllers();
+
+// Add services to the container.
+//builder.Services.AddKeyVaultIfConfigured(builder.Configuration);
 
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
@@ -11,10 +26,11 @@ builder.Services.AddWebServices();
 
 var app = builder.Build();
 
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    await app.InitialiseDatabaseAsync();
+    //await app.InitialiseDatabaseAsync();
 }
 else
 {
@@ -23,7 +39,7 @@ else
 }
 
 app.UseHealthChecks("/health");
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseSwaggerUi(settings =>
@@ -32,18 +48,31 @@ app.UseSwaggerUi(settings =>
     settings.DocumentPath = "/api/specification.json";
 });
 
+app.UseCors(Allow_Origin_Policy);
+// Configure routing
+app.UseRouting();
+app.UseAuthorization();
+
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller}/{action=Index}/{id?}");
+    pattern: "{controller}/{action}");
 
-app.MapRazorPages();
+// Optionally add an API-specific route
+app.MapControllerRoute(
+    name: "api",
+    pattern: "api/{controller}/{action}");
+
+app.MapControllers();
+
+//app.MapRazorPages();
 
 app.MapFallbackToFile("index.html");
 
 app.UseExceptionHandler(options => { });
 
+app.Map("/", () => Results.Redirect("/api"));
 
-app.MapEndpoints();
+//app.MapEndpoints();
 
 app.Run();
 

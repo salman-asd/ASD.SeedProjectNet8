@@ -3,6 +3,7 @@ using ASD.SeedProjectNet8.Domain.Constants;
 using ASD.SeedProjectNet8.Infrastructure.Data;
 using ASD.SeedProjectNet8.Infrastructure.Data.Interceptors;
 using ASD.SeedProjectNet8.Infrastructure.Identity;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -32,16 +33,18 @@ public static class DependencyInjection
 
         services.AddScoped<ApplicationDbContextInitialiser>();
 
-        services
-            .AddDefaultIdentity<ApplicationUser>()
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ApplicationDbContext>();
+        services.AddIdentityService(configuration);
 
-        services.AddSingleton(TimeProvider.System);
-        services.AddTransient<IIdentityService, IdentityService>();
+        //services
+        //    .AddDefaultIdentity<ApplicationUser>()
+        //    .AddRoles<IdentityRole>()
+        //    .AddEntityFrameworkStores<ApplicationDbContext>();
 
-        services.AddAuthorization(options =>
-            options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator)));
+        //services.AddSingleton(TimeProvider.System);
+        //services.AddTransient<IIdentityService, IdentityService>();
+
+        //services.AddAuthorization(options =>
+        //    options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator)));
 
         return services;
     }

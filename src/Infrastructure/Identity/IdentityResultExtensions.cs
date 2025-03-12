@@ -11,4 +11,11 @@ public static class IdentityResultExtensions
             ? Result.Success()
             : Result.Failure(result.Errors.Select(e => e.Description));
     }
+
+    public static Result<TValue> ToApplicationResult<TValue>(this IdentityResult result, TValue value)
+    {
+        return result.Succeeded
+            ? Result<TValue>.Success(value)
+            : Result<TValue>.Failure(result.Errors.Select(e => e.Description));
+    }
 }
