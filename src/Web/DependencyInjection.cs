@@ -24,8 +24,6 @@ public static class DependencyInjection
         services.AddHealthChecks()
             .AddDbContextCheck<ApplicationDbContext>();
 
-        services.AddExceptionHandler<CustomExceptionHandler>();
-
         services.AddRazorPages();
 
         // Customise default API behaviour

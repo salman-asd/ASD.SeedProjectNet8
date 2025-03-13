@@ -1,4 +1,5 @@
 ﻿using ASD.SeedProjectNet8.Application.Identity.Interfaces;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;

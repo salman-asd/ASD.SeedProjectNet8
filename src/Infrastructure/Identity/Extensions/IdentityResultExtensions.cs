@@ -1,7 +1,7 @@
 ﻿using ASD.SeedProjectNet8.Application.Common.Models;
 using Microsoft.AspNetCore.Identity;
 
-namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 
 public static class IdentityResultExtensions
 {

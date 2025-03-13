@@ -1,11 +1,16 @@
-﻿using ASD.SeedProjectNet8.Domain.Constants;
+﻿using System.Security.Claims;
+using ASD.SeedProjectNet8.Domain.Constants;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Permissions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using PermissionConstant = ASD.SeedProjectNet8.Application.Identity.Permissions;
 
-namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 
 public static class IdentityInitialiserExtensions
 {
@@ -45,7 +50,7 @@ internal sealed class IdentityDbContextInitialiser(
     {
         try
         {
-            if (!await context.Users.AsNoTracking().AnyAsync())
+            //if (!await context.Users.AsNoTracking().AnyAsync())
                 await SeedDefaultIdentityAsync();
         }
         catch (Exception ex)
@@ -65,17 +70,32 @@ internal sealed class IdentityDbContextInitialiser(
             await roleManager.CreateAsync(administratorRole);
         }
 
-        // Get Permission
-        //var features = PermissionConstant.GetAllNestedModule(typeof(PermissionConstant.Admin));
-        //features.AddRange(PermissionConstant.GetAllNestedModule(typeof(PermissionConstant.CommonSetup)));
+        var basicRole = new IdentityRole(Roles.Basic);
 
-        //var permissions = PermissionConstant.GetPermissionsByfeatures(features);
+        if (roleManager.Roles.All(r => r.Name != basicRole.Name))
+        {
+            await roleManager.CreateAsync(basicRole);
+        }
+
+        // Get Permission
+        var features = PermissionConstant.GetAllNestedModule(typeof(PermissionConstant.Admin));
+        features.AddRange(PermissionConstant.GetAllNestedModule(typeof(PermissionConstant.CommonSetup)));
+
+        var permissions = PermissionConstant.GetPermissionsByfeatures(features);
 
         // Default Permissions
-        //foreach (var permission in permissions)
-        //{
-        //    await roleManager.AddClaimAsync(administratorRole, new Claim(CustomClaimTypes.Permission, permission));
-        //}
+        foreach (var permission in permissions)
+        {
+            // Check if the permission already exists for the role
+            var existingClaims = await roleManager.GetClaimsAsync(administratorRole);
+            var permissionExists = existingClaims.Any(c => c.Type == CustomClaimTypes.Permission && c.Value == permission);
+
+            // If the permission does not exist, add it
+            if (!permissionExists)
+            {
+                await roleManager.AddClaimAsync(administratorRole, new Claim(CustomClaimTypes.Permission, permission));
+            }
+        }
 
         // Default users
         var administrator = new ApplicationUser { UserName = "administrator@localhost", Email = "administrator@localhost" };
@@ -87,6 +107,11 @@ internal sealed class IdentityDbContextInitialiser(
             {
                 await userManager.AddToRolesAsync(administrator, [administratorRole.Name]);
             }
+            if (!string.IsNullOrWhiteSpace(basicRole.Name))
+            {
+                await userManager.AddToRolesAsync(administrator, [basicRole.Name]);
+            }
+
         }
     }
 }

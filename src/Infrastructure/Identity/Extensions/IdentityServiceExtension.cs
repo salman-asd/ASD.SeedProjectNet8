@@ -10,8 +10,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ASD.SeedProjectNet8.Application.Identity.Interfaces;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Permissions;
 
-namespace ASD.SeedProjectNet8.Infrastructure.Identity;
+namespace ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 
 internal static class IdentityServiceExtension
 {
@@ -55,9 +57,9 @@ internal static class IdentityServiceExtension
         services.AddAuthorizationBuilder()
             .AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator));
 
-        //services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>(); // Handles dynamic permission checks
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>(); // Handles dynamic permission checks
         // For dynamically create policy if not exist
-        //services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>(); // Dynamically provides policies
+        services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>(); // Dynamically provides policies
 
         return services;
     }

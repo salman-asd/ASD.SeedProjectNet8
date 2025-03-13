@@ -2,15 +2,15 @@ using System.Transactions;
 using ASD.SeedProjectNet8.Application.Common.Interfaces;
 using ASD.SeedProjectNet8.Application.Common.Models;
 using ASD.SeedProjectNet8.Application.Identity.Commands;
-using Microsoft.AspNetCore.Authorization;
+using ASD.SeedProjectNet8.Domain.Constants;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 using Microsoft.AspNetCore.Identity;
 
 namespace ASD.SeedProjectNet8.Infrastructure.Identity.Services;
 
 public class IdentityService(
     UserManager<ApplicationUser> userManager,
-    IUserClaimsPrincipalFactory<ApplicationUser> userClaimsPrincipalFactory,
-    IAuthorizationService authorizationService,
     IdentityDbContext identityContext) : IIdentityService
 {
     public async Task<string?> GetUserNameAsync(string userId)
@@ -19,19 +19,6 @@ public class IdentityService(
 
         return user?.UserName;
     }
-
-    //public async Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password, )
-    //{
-    //    var user = new ApplicationUser
-    //    {
-    //        UserName = userName,
-    //        Email = userName,
-    //    };
-
-    //    var result = await _userManager.CreateAsync(user, password);
-
-    //    return (result.ToApplicationResult(), user.Id);
-    //}
 
     public async Task<Result<string>> CreateUserAsync(
         CreateAppUserCommand command,
@@ -59,6 +46,9 @@ public class IdentityService(
             {
                 return createUserResult.ToApplicationResult<string>(string.Empty);
             }
+
+            // Add user to the basic role
+            await userManager.AddToRoleAsync(user, Roles.Basic);
 
             // Add roles if specified
             //if (command.Roles?.Count > 0)

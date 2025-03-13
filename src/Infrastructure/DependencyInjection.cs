@@ -2,7 +2,7 @@
 using ASD.SeedProjectNet8.Domain.Constants;
 using ASD.SeedProjectNet8.Infrastructure.Data;
 using ASD.SeedProjectNet8.Infrastructure.Data.Interceptors;
-using ASD.SeedProjectNet8.Infrastructure.Identity;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 using ASD.SeedProjectNet8.Infrastructure.Identity.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;

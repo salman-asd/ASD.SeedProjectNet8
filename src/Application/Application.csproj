@@ -17,7 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Common\Interfaces\Identity\" />
     <Folder Include="Identity\Queries\" />
   </ItemGroup>
 

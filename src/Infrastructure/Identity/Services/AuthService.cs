@@ -1,18 +1,20 @@
-﻿using ASD.SeedProjectNet8.Application.Common.Models;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using ASD.SeedProjectNet8.Application.Common.Models;
+using ASD.SeedProjectNet8.Application.Identity.Exceptions;
+using ASD.SeedProjectNet8.Application.Identity.Interfaces;
+using ASD.SeedProjectNet8.Application.Identity.Models;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Entities;
+using ASD.SeedProjectNet8.Infrastructure.Identity.Extensions;
 using ASD.SeedProjectNet8.Infrastructure.Identity.OptionsSetup;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
-using ASD.SeedProjectNet8.Application.Identity.Models;
-using ASD.SeedProjectNet8.Application.Identity.Interfaces;
 
 namespace ASD.SeedProjectNet8.Infrastructure.Identity.Services;
 
@@ -31,52 +33,81 @@ internal sealed class AuthService(
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
 
     public async Task<AuthenticatedResponse> LoginAsync(
-        string username,
-        string password,
-        bool rememberMe = false,
-        CancellationToken cancellation = default)
+          string username,
+          string password,
+          bool rememberMe = false,
+          CancellationToken cancellation = default)
     {
         var user = await FindUserByUsernameOrEmail(username);
 
-        if (user is null
-            || !await userManager.CheckPasswordAsync(user, password))
+        if (user is null)
         {
-            logger.LogWarning("Invalid login attempt for user {Username}", username);
-            throw new UnauthorizedAccessException("Invalid login attempt");
-            //return Error.NotFound(nameof(user), ErrorMessages.WRONG_USERNAME_PASSWORD);
+            logger.LogWarning("Login attempt for non-existent user {Username}", username);
+            throw new InvalidCredentialsException();
         }
+
+        // Check if user is locked out
+        if (await userManager.IsLockedOutAsync(user))
+        {
+            logger.LogWarning("Login attempt for locked out user {Username}", username);
+            throw new UserLockedOutException();
+        }
+
+        // Verify password
+        if (!await userManager.CheckPasswordAsync(user, password))
+        {
+            logger.LogWarning("Invalid password for user {Username}", username);
+
+            // Update failed attempts counter
+            await userManager.AccessFailedAsync(user);
+            throw new InvalidCredentialsException();
+        }
+
+        // Check if email is confirmed (if required)
+        if (userManager.Options.SignIn.RequireConfirmedEmail && !user.EmailConfirmed)
+        {
+            logger.LogWarning("Login attempt with unconfirmed email for user {Username}", username);
+            throw new EmailConfirmationException();
+        }
+
+        // Reset lockout counters on successful login
+        await userManager.ResetAccessFailedCountAsync(user);
 
         // Generate new tokens
         return await GenerateTokenResponseAsync(user, rememberMe, cancellation);
     }
 
     public async Task<AuthenticatedResponse> RefreshTokenAsync(
-        string accessToken,
         string refreshToken,
+        string accessToken,
         CancellationToken cancellation = default)
     {
         var existingRefreshToken = await dbContext.RefreshTokens
             .Include(x => x.ApplicationUser)
             .SingleOrDefaultAsync(x => x.Token == refreshToken, cancellation);
 
-        if (existingRefreshToken is null
-            || !existingRefreshToken.IsActive)
+        if (existingRefreshToken is null)
         {
-            logger.LogWarning("Token refresh failed: Invalid or inactive refresh token");
-            throw new UnauthorizedAccessException("Invalid or inactive refresh token");
+            logger.LogWarning("Token refresh failed: Refresh token not found");
+            throw new RefreshTokenException();
         }
 
-        // Get ClaimPrincipal from accessToken
-        var claimsPrincipalResult = GetClaimsPrincipalFromToken(accessToken);
-
-        var userId = claimsPrincipalResult?.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        // Ensure the refresh token belongs to the user
-        if (existingRefreshToken.UserId != userId)
+        if (!existingRefreshToken.IsActive)
         {
-            logger.LogWarning("Token refresh failed: Token does not belong to user");
-            throw new UnauthorizedAccessException("Token does not belong to user");
-            //return Error.Validation("Token", "Invalid refresh token");
+            logger.LogWarning("Token refresh failed: Refresh token is not active");
+            throw new RefreshTokenException();
+        }
+
+        try
+        {
+            ValidateRefreshTokenOwnership(accessToken, existingRefreshToken.UserId);
+        }
+        catch
+        {
+            // If validation fails, invalidate the token
+            existingRefreshToken.Revoked = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync(cancellation);
+            throw;
         }
 
         var (newAccessToken, accessTokenExpiration) = await tokenProvider
@@ -91,17 +122,14 @@ internal sealed class AuthService(
             newRefreshToken.Expires);
     }
 
-    public async Task<Result> Logout(
-        string userId,
-        string accessToken,
+    public async Task<Result> LogoutAsync(
         string refreshToken,
         CancellationToken cancellation = default)
     {
-        // Get ClaimPrincipal from accessToken
-        var claimsPrincipalResult = GetClaimsPrincipalFromToken(accessToken);
-
-        // Get Identity UserId  from ClaimPrincipal
-        var userIdFromAccessToken = claimsPrincipalResult?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            return Result.Success();
+        }
 
         var existingRefreshToken = await dbContext.RefreshTokens
             .SingleOrDefaultAsync(x => x.Token == refreshToken, cancellation);
@@ -110,8 +138,8 @@ internal sealed class AuthService(
         {
             existingRefreshToken.Revoked = DateTime.UtcNow;
             await dbContext.SaveChangesAsync(cancellation);
+            logger.LogInformation("User {UserId} logged out successfully", existingRefreshToken.UserId);
         }
-        logger.LogInformation("User {UserId} logged out successfully", userId);
 
         return Result.Success();
     }
@@ -125,8 +153,13 @@ internal sealed class AuthService(
         var user = await userManager.FindByIdAsync(userId);
 
         if (user is null)
-            throw new NotFoundException(nameof(user), userId);
-            //return Error.Failure("User.Update", ErrorMessages.USER_NOT_FOUND);
+            throw new NotFoundException(nameof(ApplicationUser), userId);
+
+        // Validate current password
+        if (!await userManager.CheckPasswordAsync(user, currentPassword))
+        {
+            return Result.Failure(["Current password is incorrect"]);
+        }
 
         var identityResult = await userManager.ChangePasswordAsync(user, currentPassword, newPassword);
 
@@ -136,7 +169,7 @@ internal sealed class AuthService(
         // Invalidate all refresh tokens
         await InvalidateUserAllRefreshTokensAsync(userId, cancellation);
 
-        return identityResult.ToApplicationResult();
+        return Result.Success();
     }
 
     public async Task<Result> ForgotPasswordAsync(
@@ -145,7 +178,12 @@ internal sealed class AuthService(
     {
         var user = await userManager.FindByEmailAsync(email);
 
-        //if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
+
+        // Always return success to avoid leaking information about registered users
+        if (user is null || !user.EmailConfirmed)
+            return Result.Success();
+
+        //if (user == null || !(await userManager.IsEmailConfirmedAsync(user)))
         if (user is null)
             return Result.Success();
 
@@ -174,9 +212,8 @@ internal sealed class AuthService(
 
         if (user is null)
         {
-            logger.LogWarning("Password reset requested for unknown user.");
-            //return Error.Failure("User.ResetPassword", ErrorMessages.USER_NOT_FOUND);
-            throw new UnauthorizedAccessException("Invalid user");
+            logger.LogWarning("Password reset requested for unknown email: {Email}", email);
+            throw new NotFoundException("User", email);
         }
 
         var result = await userManager.ResetPasswordAsync(user, token, password);
@@ -216,8 +253,13 @@ internal sealed class AuthService(
             UserId = user.Id
         };
 
+        // Optionally limit the number of active refresh tokens per user
+        await EnforceRefreshTokenLimitPerUserAsync(user.Id, 5, cancellationToken);
+
         dbContext.RefreshTokens.Add(refreshToken);
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        logger.LogInformation("User {UserId} authenticated successfully", user.Id);
 
         return new AuthenticatedResponse(
             accessToken,
@@ -226,18 +268,47 @@ internal sealed class AuthService(
             refreshToken.Expires);
     }
 
+    private async Task EnforceRefreshTokenLimitPerUserAsync(
+        string userId,
+        int maxActiveTokens,
+        CancellationToken cancellationToken)
+    {
+        // Get all active tokens for the user
+        var activeTokens = await dbContext.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.Revoked == null)
+            .OrderByDescending(rt => rt.Created)
+            .ToListAsync(cancellationToken);
+
+        // If the user has more active tokens than allowed, revoke the oldest ones
+        if (activeTokens.Count >= maxActiveTokens)
+        {
+            var tokensToRevoke = activeTokens.Skip(maxActiveTokens - 1).ToList();
+            foreach (var token in tokensToRevoke)
+            {
+                token.Revoked = DateTime.UtcNow;
+            }
+            await dbContext.SaveChangesAsync(cancellationToken);
+            logger.LogInformation("Revoked {Count} old refresh tokens for user {UserId}", tokensToRevoke.Count, userId);
+        }
+    }
+
+
     private async Task<RefreshToken> RotateRefreshToken(
         RefreshToken existingToken,
         CancellationToken cancellationToken = default)
     {
+        // Revoke the existing token
+        existingToken.Revoked = DateTime.UtcNow;
+
+        // Create a new token that expires at the same time as the original would have
         var newRefreshToken = new RefreshToken
         {
             Token = tokenProvider.GenerateRefreshToken(),
-            Expires = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpires),
+            //Expires = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpires),
+            Expires = existingToken.Expires, // Maintain the original expiration time
             Created = DateTime.UtcNow,
             UserId = existingToken.UserId
         };
-        existingToken.Revoked = DateTime.UtcNow;
 
         dbContext.RefreshTokens.Add(newRefreshToken);
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -251,16 +322,80 @@ internal sealed class AuthService(
                ?? await userManager.FindByNameAsync(identifier);
     }
 
+
     private async Task InvalidateUserAllRefreshTokensAsync(
         string userId,
         CancellationToken cancellationToken)
     {
-        // Delete all refresh tokens for the user
-        await dbContext.RefreshTokens
-            .Where(rt => rt.UserId == userId)
-            .ExecuteDeleteAsync(cancellationToken);
+        // Find all active refresh tokens for the user
+        var activeTokens = await dbContext.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .ExecuteUpdateAsync(token => token
+                .SetProperty(x => x.Revoked, DateTime.UtcNow)
+            );
+        logger.LogInformation("Revoked all refresh tokens for user {UserId}", userId);
+    }
 
-        logger.LogInformation("Deleted all refresh tokens for user {UserId}", userId);
+    private void ValidateRefreshTokenOwnership(
+           string accessToken,
+           string refreshUserId)
+    {
+        ClaimsPrincipal claimsPrincipal;
+
+        try
+        {
+            claimsPrincipal = GetClaimsPrincipalFromToken(accessToken);
+        }
+        catch
+        {
+            logger.LogWarning("Token refresh failed: Invalid access token");
+            throw new InvalidTokenException();
+        }
+
+        var userId = claimsPrincipal.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        // Ensure the refresh token belongs to the user
+        if (refreshUserId != userId)
+        {
+            logger.LogWarning("Token refresh failed: Token does not belong to user");
+            throw new RefreshTokenException();
+        }
+    }
+
+
+
+    private ClaimsPrincipal GetClaimsPrincipalFromToken(string accessToken)
+    {
+        try
+        {
+            TokenValidationParameters tokenValidationParameters = new()
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = false, // Don't validate lifetime as token might be expired
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = _jwtOptions.Issuer,
+                ValidAudience = _jwtOptions.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SecretKey)),
+                ClockSkew = TimeSpan.Zero
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var principal = tokenHandler.ValidateToken(accessToken, tokenValidationParameters, out SecurityToken securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtSecurityToken
+                || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            {
+                throw new InvalidTokenException();
+            }
+
+            return principal;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token validation failed");
+            throw new InvalidTokenException();
+        }
     }
 
     // Method to handle email sending (non-async signature)
@@ -272,7 +407,7 @@ internal sealed class AuthService(
                 Directory.GetCurrentDirectory(),
                 "Templates",
                 "ForgotPassword",
-                 "ForgotPassword.cshtml");
+                "ForgotPassword.cshtml");
 
             //emailService.SendTemplateEmailAsync(
             //    user.Email,
@@ -317,42 +452,5 @@ internal sealed class AuthService(
     private string? GetIpAddress()
     {
         return httpContext?.HttpContext?.Connection.RemoteIpAddress?.ToString();
-    }
-
-    private ClaimsPrincipal GetClaimsPrincipalFromToken(string accessToken)
-    {
-
-        try
-        {
-            TokenValidationParameters tokenValidationParameters = new()
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = false, // it's false because already token lifetime validated
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = _jwtOptions.Issuer,
-                ValidAudience = _jwtOptions.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SecretKey)),
-                ClockSkew = TimeSpan.Zero
-            };
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-
-            var principal = tokenHandler.ValidateToken(accessToken, tokenValidationParameters, out SecurityToken securityToken);
-
-            if (securityToken is not JwtSecurityToken jwtSecurityToken
-                || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-            {
-                //return Error.Validation("Token", ErrorMessages.INVALID_TOKEN);
-                throw new UnauthorizedAccessException("Invalid token");
-            }
-
-            return principal;
-        }
-        catch
-        {
-            //return Error.Validation("Token", ErrorMessages.INVALID_TOKEN);
-            throw new UnauthorizedAccessException("Invalid token");
-        }
     }
 }
